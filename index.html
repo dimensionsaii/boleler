@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Boleler.io</title>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <h1>Boleler.io 🎨</h1>
+  <p>Сурет сал, қазақша тап!</p>
+
+  <label for="name">Ойыншының аты:</label>
+  <input
+    id="name"
+    type="text"
+    placeholder="Атыңды жаз"
+    maxlength="24"
+  >
+
+  <button id="create-room" type="button">
+    Бөлме құру
+  </button>
+
+  <input
+    id="room-code"
+    type="text"
+    placeholder="Бөлме коды"
+    aria-label="Бөлме коды"
+    maxlength="6"
+    inputmode="numeric"
+  >
+
+  <button id="join-room" type="button">
+    Бөлмеге қосылу
+  </button>
+
+  <!-- Лобби -->
+  <section id="lobby" hidden>
+    <h2>Ойын бөлмесі</h2>
+
+    <p>
+      Бөлме коды:
+      <strong id="lobby-code"></strong>
+    </p>
+
+    <p id="lobby-status" aria-live="polite"></p>
+
+    <p>Ойыншылар:</p>
+    <ul id="players"></ul>
+
+    <button id="start-game" type="button">
+      Ойынды бастау
+    </button>
+  </section>
+
+  <!-- Ойын -->
+  <section id="game" hidden>
+    <h2>Ойыншылар мен ұпайлар 🏆</h2>
+    <ul id="game-players"></ul>
+
+    <div id="word-choice" hidden>
+      <h2>Бір сөзді таңда 🎯</h2>
+      <div id="word-options"></div>
+    </div>
+
+    <h2>Сурет салатын тақта 🎨</h2>
+
+    <p>
+      Сөз:
+      <strong id="draw-word"></strong>
+    </p>
+
+    <p id="timer" role="timer">
+      Қалған уақыт: 60 секунд
+    </p>
+
+    <button id="next-word" type="button" hidden>
+      Келесі сөз
+    </button>
+
+    <div class="tools">
+      <label for="color">Түс:</label>
+
+      <input
+        id="color"
+        type="color"
+        value="#172554"
+      >
+
+      <button id="clear-canvas" type="button">
+        Тазалау
+      </button>
+
+      <button id="fill-canvas" type="button">
+        Фонды бояу 🪣
+      </button>
+    </div>
+
+    <canvas
+      id="canvas"
+      width="800"
+      height="500"
+      aria-label="Сурет салатын тақта"
+    ></canvas>
+
+    <div id="chat">
+      <h2>Жауаптар мен чат</h2>
+
+      <div id="messages" aria-live="polite"></div>
+
+      <form id="guess-form">
+        <label for="guess">Жауабың:</label>
+
+        <input
+          id="guess"
+          type="text"
+          placeholder="Қазақша жауап жаз"
+          maxlength="100"
+          autocomplete="off"
+          required
+        >
+
+        <button type="submit">Жіберу</button>
+      </form>
+    </div>
+  </section>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

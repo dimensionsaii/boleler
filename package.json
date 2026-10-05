@@ -1,0 +1,20 @@
+{
+  "name": "boleler.io",
+  "version": "1.0.0",
+  "description": "Қазақша сурет салу және сөз табу ойыны",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "socket.io": "^4.8.4"
+  }
+}
