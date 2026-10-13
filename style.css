@@ -530,3 +530,31 @@ body:has(#game:not([hidden])) > p {
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+/* Compact board-first layout for phones. */
+select { font: inherit; border: 2px solid var(--border); border-radius: 12px; padding: 10px; background: var(--paper); min-height: 44px; min-width: 0; }
+#canvas { border: 0; box-shadow: 0 0 0 2px var(--border); user-select: none; -webkit-user-select: none; }
+@media (max-width: 700px) {
+  body:has(#game:not([hidden])) { padding: 10px max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+  body:has(#game:not([hidden])) > h1 { font-size: 25px; }
+  body:has(#game:not([hidden])) > p { margin-bottom: 10px; }
+  #game { gap: 8px; }
+  #game > h2:first-of-type { order: 10; padding: 10px; font-size: 16px; }
+  #leader-text { order: 11; padding: 10px; font-size: 14px; }
+  #game-players { order: 12; max-height: 150px; }
+  #word-choice { order: 0; }
+  #game > h2:nth-of-type(2) { display: none; }
+  #game > p:not(#timer) { order: 1; padding: 10px 12px; }
+  #timer { order: 2; padding: 8px 12px; font-size: 14px; }
+  #canvas { order: 3; border-radius: 10px; }
+  .tools { order: 4; gap: 6px; padding: 8px; }
+  .tools label { font-size: 13px; }
+  .tools input[type="color"] { height: 44px; width: 44px; }
+  .tools button { min-height: 44px; flex: 1 1 auto; }
+  #chat { order: 5; padding: 10px; }
+  #chat h2 { margin-bottom: 8px; font-size: 16px; }
+  #messages { height: 110px; margin-bottom: 8px; }
+  #guess-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  #guess-form label { grid-column: 1 / -1; }
+  #guess-form input, #guess-form button { min-height: 44px; padding: 10px; }
+  #word-options button { min-height: 48px; }
+}

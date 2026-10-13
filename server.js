@@ -60,7 +60,22 @@ const words = [
   "Велосипед тепкен аю",
   "Ғарыштағы бауырсақ",
   "Домбыра тартқан мысық",
-  "Қолшатыр ұстаған пингвин"
+  "Қолшатыр ұстаған пингвин",
+  "Таксиге жүгірген студент", "Бауырсақ жеген мысық", "Ұйықтап қалған мұғалім",
+  "Домбыра тартқан робот", "Скейтборд тепкен түйе", "Билейтін қияр",
+  "Балмұздақ жеген аю", "Ғарыштағы киіз үй", "Кітап оқыған бақа",
+  "Селфи түсірген пингвин", "Торт пісірген айдаһар", "Қымыз ішкен динозавр",
+  "Автобус күткен мысық", "Қардағы пальма", "Ұшатын шәйнек",
+  "Емтихан", "Жатақхана", "Студент", "Кітапхана", "Диплом", "Стипендия",
+  "Ноутбук", "Пернетақта", "Тінтуір", "Қуаттағыш", "Камера", "Микрофон",
+  "Аққу", "Түлкі", "Қасқыр", "Бақа", "Арыстан", "Жолбарыс", "Аю", "Елік",
+  "Бүркітші", "Алтыбақан", "Көкпар", "Тұсаукесер", "Сәукеле", "Жетіген",
+  "Бешбармақ", "Самса", "Манты", "Палау", "Шұбат", "Ірімшік", "Күріш",
+  "Кемпірқосақ", "Найзағай", "Аққала", "Сарқырама", "Шөл", "Орман",
+  "Коньки", "Шаңғы", "Футбол", "Баскетбол", "Шахмат", "Бокс", "Теннис",
+  "Суперқаһарман", "Сиқыршы", "Су перісі", "Қарақшы", "Робот", "Айдаһар",
+  "Пойыздағы піл", "Тақия киген панда", "Жүгіруші тасбақа", "Әнші картоп",
+  "Күнге күйген аққала", "Жаңбырдағы динозавр", "Балық ұстаған робот"
 ];
 
 // Сайт файлдары
@@ -512,29 +527,35 @@ io.on("connection", socket => {
     selectWord(code, data?.word);
   });
 
-  // Ортақ тақта
-  socket.on("canvas-update", data => {
+  // Only the active drawer may send small, validated drawing commands.
+  function drawingRoom(data) {
     const code = socket.data.roomCode;
     const room = rooms.get(code);
+    if (!room || room.phase !== "drawing" || Date.now() >= room.endsAt ||
+        room.drawerId !== socket.id || data?.turnId !== room.turnId) return null;
+    return { code, room };
+  }
 
-    if (!room || room.phase !== "drawing") return;
-    if (Date.now() >= room.endsAt) return;
-    if (room.drawerId !== socket.id) return;
-    if (data?.turnId !== room.turnId) return;
+  socket.on("draw-segments", data => {
+    const target = drawingRoom(data);
+    if (!target || !Array.isArray(data.segments) ||
+        data.segments.length < 1 || data.segments.length > 64) return;
+    const valid = data.segments.every(s => s &&
+      [s.x0, s.y0, s.x1, s.y1].every(n => Number.isFinite(n) && n >= 0 && n <= 1) &&
+      Number.isFinite(s.width) && s.width >= 1 && s.width <= 24 &&
+      typeof s.color === "string" && /^#[0-9a-f]{6}$/i.test(s.color));
+    if (!valid) return;
+    const segments = data.segments.map(({x0,y0,x1,y1,color,width}) => ({x0,y0,x1,y1,color,width}));
+    socket.to(target.code).emit("draw-segments", {turnId: target.room.turnId, segments});
+  });
 
-    const image = data?.image;
-
-    if (
-      typeof image !== "string" ||
-      !image.startsWith("data:image/png;base64,") ||
-      image.length > 900000
-    ) {
-      return;
-    }
-
-    socket.to(code).emit("canvas-update", {
-      turnId: room.turnId,
-      image
+  socket.on("board-action", data => {
+    const target = drawingRoom(data);
+    if (!target || !["clear", "fill"].includes(data.action)) return;
+    if (data.action === "fill" && (typeof data.color !== "string" || !/^#[0-9a-f]{6}$/i.test(data.color))) return;
+    socket.to(target.code).emit("board-action", {
+      turnId: target.room.turnId, action: data.action,
+      ...(data.action === "fill" ? {color: data.color} : {})
     });
   });
 

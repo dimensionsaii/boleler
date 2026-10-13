@@ -79,7 +79,10 @@ let turnId = 0;
 let isDrawer = false;
 let canDraw = false;
 let drawing = false;
-let lastCanvasSend = 0;
+let pendingSegments = [];
+let flushTimer = null;
+let activePointer = null;
+let lastPoint = null;
 let latestCanvasUpdate = 0;
 
 ctx.strokeStyle = colorInput.value;
@@ -99,6 +102,8 @@ function checkConnection() {
 
 function stopDrawing() {
   drawing = false;
+  activePointer = null;
+  lastPoint = null;
 }
 
 function clearCanvas() {
@@ -110,6 +115,7 @@ function clearCanvas() {
 
 function updateTools() {
   colorInput.disabled = !canDraw;
+  document.getElementById("brush-size").disabled = !canDraw;
   clearButton.disabled = !canDraw;
   fillButton.disabled = !canDraw;
 }
@@ -121,6 +127,7 @@ function addMessage(text, correct = false) {
   if (correct) message.classList.add("correct");
 
   messages.appendChild(message);
+  while (messages.children.length > 150) messages.firstElementChild.remove();
   messages.scrollTop = messages.scrollHeight;
 }
 
@@ -237,7 +244,9 @@ socket.on("turn-started", data => {
   turnId = data.turnId;
   isDrawer = socket.id === data.drawerId;
   canDraw = false;
-  lastCanvasSend = 0;
+  pendingSegments = [];
+  clearTimeout(flushTimer);
+  flushTimer = null;
 
   stopDrawing();
   clearCanvas();
@@ -356,105 +365,94 @@ function getPosition(event) {
   const rect = canvas.getBoundingClientRect();
 
   return {
-    x: (event.clientX - rect.left) * canvas.width / rect.width,
-    y: (event.clientY - rect.top) * canvas.height / rect.height
+    x: Math.max(0, Math.min(canvas.width, (event.clientX - rect.left) * canvas.width / rect.width)),
+    y: Math.max(0, Math.min(canvas.height, (event.clientY - rect.top) * canvas.height / rect.height))
   };
 }
 
-// Суретті жіберу
-function sendCanvas(force = false) {
-  if (!canDraw || !socket.connected) return;
+// Send compact strokes in ordered batches; never encode the canvas while drawing.
+function paintSegment(segment) {
+  ctx.beginPath();
+  ctx.strokeStyle = segment.color;
+  ctx.lineWidth = segment.width;
+  ctx.moveTo(segment.x0 * canvas.width, segment.y0 * canvas.height);
+  ctx.lineTo(segment.x1 * canvas.width, segment.y1 * canvas.height);
+  ctx.stroke();
+}
 
-  const now = Date.now();
+function flushSegments() {
+  clearTimeout(flushTimer);
+  flushTimer = null;
+  if (!pendingSegments.length) return;
+  const segments = pendingSegments;
+  pendingSegments = [];
+  if (socket.connected && canDraw) socket.emit("draw-segments", { turnId, segments });
+}
 
-  if (!force && now - lastCanvasSend < 150) return;
-
-  lastCanvasSend = now;
-
-  socket.emit("canvas-update", {
-    turnId,
-    image: canvas.toDataURL("image/png")
-  });
+function queueSegment(from, to) {
+  const segment = {
+    x0: from.x / canvas.width, y0: from.y / canvas.height,
+    x1: to.x / canvas.width, y1: to.y / canvas.height,
+    color: colorInput.value, width: Number(document.getElementById("brush-size").value)
+  };
+  paintSegment(segment);
+  pendingSegments.push(segment);
+  if (pendingSegments.length >= 64) flushSegments();
+  else if (!flushTimer) flushTimer = setTimeout(flushSegments, 40);
 }
 
 canvas.addEventListener("pointerdown", event => {
-  if (event.button !== 0 || !canDraw) return;
-
+  if (event.button !== 0 || !canDraw || activePointer !== null) return;
   event.preventDefault();
   drawing = true;
-
+  activePointer = event.pointerId;
   canvas.setPointerCapture(event.pointerId);
-
-  const position = getPosition(event);
-
-  ctx.beginPath();
-  ctx.moveTo(position.x, position.y);
+  lastPoint = getPosition(event);
+  queueSegment(lastPoint, lastPoint);
 });
 
 canvas.addEventListener("pointermove", event => {
-  if (!drawing || !canDraw) return;
-
-  const position = getPosition(event);
-
-  ctx.lineTo(position.x, position.y);
-  ctx.stroke();
-
-  sendCanvas();
+  if (!drawing || !canDraw || event.pointerId !== activePointer) return;
+  event.preventDefault();
+  const point = getPosition(event);
+  queueSegment(lastPoint, point);
+  lastPoint = point;
 });
 
-function finishDrawing() {
-  if (drawing) sendCanvas(true);
+function finishDrawing(event) {
+  if (event && event.pointerId !== activePointer) return;
+  if (drawing) flushSegments();
   stopDrawing();
 }
-
 canvas.addEventListener("pointerup", finishDrawing);
 canvas.addEventListener("pointercancel", finishDrawing);
 canvas.addEventListener("lostpointercapture", finishDrawing);
 
-colorInput.addEventListener("input", () => {
-  ctx.strokeStyle = colorInput.value;
-});
-
-// Тазалау
-clearButton.addEventListener("click", () => {
+function boardAction(action, color) {
   if (!canDraw) return;
-
+  flushSegments();
   stopDrawing();
-  clearCanvas();
-  sendCanvas(true);
-});
+  if (action === "clear") clearCanvas();
+  else {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  socket.emit("board-action", { turnId, action, color });
+}
+clearButton.addEventListener("click", () => boardAction("clear"));
+fillButton.addEventListener("click", () => boardAction("fill", colorInput.value));
 
-// Фонды бояу
-fillButton.addEventListener("click", () => {
-  if (!canDraw) return;
-
-  stopDrawing();
-
-  ctx.fillStyle = colorInput.value;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.beginPath();
-
-  sendCanvas(true);
-});
-
-// Басқа ойыншының суреті
-socket.on("canvas-update", data => {
+socket.on("draw-segments", data => {
   if (isDrawer || data.turnId !== turnId) return;
-
-  const updateId = ++latestCanvasUpdate;
-  const receivedTurn = data.turnId;
-  const image = new Image();
-
-  image.onload = () => {
-    if (updateId !== latestCanvasUpdate) return;
-    if (receivedTurn !== turnId) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-    ctx.beginPath();
-  };
-
-  image.src = data.image;
+  data.segments.forEach(paintSegment);
+});
+socket.on("board-action", data => {
+  if (isDrawer || data.turnId !== turnId) return;
+  if (data.action === "clear") clearCanvas();
+  else {
+    ctx.fillStyle = data.color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 });
 
 // Чатқа жазу
